@@ -14,11 +14,25 @@ bot.command('start', async (ctx) => {
     return ctx.reply('Bot Store is configured, but WEBAPP_URL is missing.');
   }
 
+  const adminIds = new Set(
+    (process.env.ADMIN_TELEGRAM_IDS || '')
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean)
+  );
+
+  const keyboard = new InlineKeyboard()
+    .webApp('🚀 فتح المتجر', url);
+
+  if (ctx.from?.id && adminIds.has(String(ctx.from.id))) {
+    keyboard.row()
+      .webApp('⚙️ لوحة التحكم', `${url.replace(/\/$/, '')}/admin`);
+  }
+
   await ctx.reply(
-    '🏪 مرحبًا بك في Bot Store\n\nاكتشف بوتات Telegram وابحث عنها من المتجر.',
+    '🏪 مرحبًا بك في Bot Store\\n\\nاكتشف بوتات Telegram وابحث عنها من المتجر.',
     {
-      reply_markup: new InlineKeyboard()
-        .webApp('🚀 فتح المتجر', url)
+      reply_markup: keyboard
     }
   );
 });
