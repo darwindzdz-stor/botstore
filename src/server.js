@@ -88,6 +88,13 @@ const host=process.env.HOST||'127.0.0.1';
 const server=app.listen(port,host,async()=>{
   console.log(`BotStore running on http://${host}:${port}`);
 
+  try {
+    await bot.init();
+    console.log('Telegram bot initialized');
+  } catch (err) {
+    console.error('TELEGRAM_BOT_INIT_FAILED', err);
+  }
+
   const webhookUrl = process.env.WEBAPP_URL
     ? `${process.env.WEBAPP_URL.replace(/\/$/, '')}/telegram/webhook`
     : null;
