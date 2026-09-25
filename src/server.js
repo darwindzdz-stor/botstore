@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { initDb, now, flush, pruneEvents, pruneSessions } from './db/index.js';
 import { api } from './routes/api.js';
 import { adminApi } from './routes/admin.js';
+import { bot } from './bot/index.js';
 import { authenticateRequest } from './middleware/auth.js';
 import { validRequestTarget, isAllowedOrigin } from './security.js';
 
@@ -56,6 +57,16 @@ const limiter=(limit,windowMs=60_000)=>rateLimit({
 app.use(limiter(180));
 app.use('/api',(req,res,next)=>{ res.set('Cache-Control','no-store'); next(); });
 app.use((req,res,next)=>{ authenticateRequest(req); next(); });
+app.post('/telegram/webhook', async (req, res) => {
+  try {
+    await bot.handleUpdate(req.body);
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('TELEGRAM_WEBHOOK_ERROR', err);
+    res.sendStatus(500);
+  }
+});
+
 app.get('/health',(_,res)=>res.set('Cache-Control','no-store').json({ok:true,service:'botstore',time:now()}));
 app.get('/ready',(_,res)=>res.set('Cache-Control','no-store').json({ok:true,service:'botstore',ready:true}));
 app.use('/api/admin',adminApi);
@@ -74,7 +85,22 @@ if(process.env.NODE_ENV==='production' && !process.env.BOT_TOKEN) throw new Erro
 const port=Number(process.env.PORT||8787);
 if(!Number.isInteger(port)||port<1||port>65535) throw new Error('Invalid PORT');
 const host=process.env.HOST||'127.0.0.1';
-const server=app.listen(port,host,()=>console.log(`BotStore running on http://${host}:${port}`));
+const server=app.listen(port,host,async()=>{
+  console.log(`BotStore running on http://${host}:${port}`);
+
+  const webhookUrl = process.env.WEBAPP_URL
+    ? `${process.env.WEBAPP_URL.replace(/\/$/, '')}/telegram/webhook`
+    : null;
+
+  if (webhookUrl) {
+    try {
+      await bot.api.setWebhook(webhookUrl);
+      console.log(`Telegram webhook set: ${webhookUrl}`);
+    } catch (err) {
+      console.error('TELEGRAM_WEBHOOK_SETUP_FAILED', err);
+    }
+  }
+});
 server.requestTimeout=30_000;
 server.headersTimeout=10_000;
 server.keepAliveTimeout=5_000;
