@@ -21,7 +21,24 @@ api.post('/auth/logout',userRateLimit(20),requireUser,(req,res)=>{logoutSession(
 api.get('/me',requireUser,(req,res)=>res.json({user:get('SELECT id,telegram_id,username,first_name,language,created_at FROM users WHERE telegram_id=?',[String(req.user.id)])}));
 api.get('/categories',userRateLimit(120), (req,res)=>res.json({categories:query(`SELECT c.id,c.slug,c.name,c.icon,COUNT(b.id) bot_count FROM categories c LEFT JOIN bots b ON b.category_id=c.id AND b.status='APPROVED' GROUP BY c.id ORDER BY bot_count DESC,c.id`).map(c=>({...c,bot_count:Number(c.bot_count||0)}))}));
 api.get('/ads',userRateLimit(120), (req,res)=>res.json({ads:query("SELECT id,title,text,url,image_url,priority FROM ads WHERE active=1 ORDER BY priority DESC,id DESC LIMIT 3")}));
-api.get('/ad-config',userRateLimit(120), (req,res)=>res.json({enabled:process.env.GOOGLE_IMA_ENABLED==='1',vastTag:process.env.GOOGLE_IMA_VAST_TAG||'',everyOpen:process.env.GOOGLE_IMA_EVERY_OPEN!=='0'}));
+api.get('/ad-config',userRateLimit(120), (req,res)=>{
+  let vastTag='';
+  try {
+    const value=String(process.env.GOOGLE_IMA_VAST_TAG||'').trim();
+    if(value){
+      const u=new URL(value);
+      if(u.protocol==='https:' && !u.username && !u.password && !u.hash){
+        vastTag=u.toString().slice(0,2000);
+      }
+    }
+  } catch {}
+
+  res.json({
+    enabled:process.env.GOOGLE_IMA_ENABLED==='1' && Boolean(vastTag),
+    vastTag,
+    everyOpen:process.env.GOOGLE_IMA_EVERY_OPEN!=='0'
+  });
+});
 
 api.get('/discover',userRateLimit(60),(req,res)=>{
   const cacheKey='discover';

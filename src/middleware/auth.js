@@ -60,7 +60,7 @@ export function requireTelegramInitData(req,res,next){
 export function authenticateRequest(req){
   const token=req.get('x-botstore-session');
   if(token && /^[a-f0-9]{64}$/i.test(token)) {
-    const s=get(`SELECT s.user_id,s.expires_at,u.telegram_id,u.username,u.first_name,u.language FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=?`,[sessionTokenHash(token)]);
+    const s=get(`SELECT s.user_id,s.expires_at,s.last_used_at,u.telegram_id,u.username,u.first_name,u.language FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=?`,[sessionTokenHash(token)]);
     if(s && Date.parse(s.expires_at)>Date.now()){
       req.user={id:Number(s.telegram_id),username:s.username||'',first_name:s.first_name||'',language_code:s.language||'en'};
       const last=s.last_used_at?Date.parse(s.last_used_at):0;
@@ -77,15 +77,20 @@ export function authenticateRequest(req){
 export function logoutSession(req){ const token=req.get('x-botstore-session'); if(token && /^[a-f0-9]{64}$/i.test(token)) run('DELETE FROM sessions WHERE token_hash=?',[sessionTokenHash(token)]); }
 export function requireUser(req,res,next) { if (!req.user) return res.status(401).json({error:'AUTH_REQUIRED'}); next(); }
 export function upsertUser(tg) {
-  const id=String(tg.id), username=tg.username||'', firstName=tg.first_name||'', language=tg.language_code||'en';
-  const existing=get('SELECT * FROM users WHERE telegram_id=?',[id]);
-  if(existing) {
-    if(existing.username!==username || existing.first_name!==firstName || existing.language!==language) {
-      run('UPDATE users SET username=?,first_name=?,language=?,updated_at=? WHERE telegram_id=?',[username,firstName,language,now(),id]);
-    }
-  } else {
-    const t=now();
-    run('INSERT INTO users(telegram_id,username,first_name,language,created_at,updated_at) VALUES(?,?,?,?,?,?)',[id,username,firstName,language,t,t]);
-  }
+  const id=String(tg.id);
+  const username=tg.username||'';
+  const firstName=tg.first_name||'';
+  const language=tg.language_code||'en';
+  const t=now();
+
+  run(`INSERT INTO users(telegram_id,username,first_name,language,created_at,updated_at)
+       VALUES(?,?,?,?,?,?)
+       ON CONFLICT(telegram_id) DO UPDATE SET
+         username=excluded.username,
+         first_name=excluded.first_name,
+         language=excluded.language,
+         updated_at=excluded.updated_at`,
+    [id,username,firstName,language,t,t]);
+
   return get('SELECT * FROM users WHERE telegram_id=?',[id]);
 }

@@ -2,7 +2,6 @@ import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { isIPv6 } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initDb, now, flush, pruneEvents, pruneSessions } from './db/index.js';
